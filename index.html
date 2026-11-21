@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Before You Agree — Class Experiment</title>
+<!--
+  SETUP (one time):
+  1. Create a Google Sheet → Extensions › Apps Script → paste the doPost script (see bottom of this file) → Save.
+  2. Deploy › New deployment › Web app · Execute as: Me · Who has access: Anyone → Deploy → copy the /exec URL.
+  3. Paste that URL into SHEET_URL below, then host this file (GitHub Pages / Netlify / Drive link etc.).
+  Optional: add #A or #B to the link to force a group.
+-->
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f5f1;--card:#fff;--tx:#1c1b18;--mu:#6b6a63;--bd:#e2e0d8;--ac:#1f6f5c;--acs:#e3f1ec;--wr:#b8860b;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#151512;--card:#1f1e1a;--tx:#eeece4;--mu:#a09e94;--bd:#34332d;--ac:#4fb39a;--acs:#1d3a33;--wr:#e0b341;--bad:#f2837b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+h1{font-size:22px;margin:0 0 2px}h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:0 0 6px}
+.mu{color:var(--mu);font-size:14px}.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:14px 0}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:11px 16px}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:600}button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:130px}
+.tc{max-height:300px;overflow:auto;border:1px solid var(--bd);border-radius:10px;padding:12px;font-size:12.5px;line-height:1.45;color:var(--mu);background:var(--bg)}
+.tc p{margin:0 0 8px}
+.pt{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--bd)}.pt:last-of-type{border:0}.pt .i{font-size:24px}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--acs);padding:10px 12px;border-radius:10px;margin-top:8px;font-size:14px}
+.tg{width:46px;height:26px;border-radius:13px;background:var(--bd);position:relative;padding:0;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
+.tg.on{background:var(--ac)}.tg.on::after{left:23px}
+.opt{display:block;width:100%;text-align:left;margin:6px 0}
+.warn{background:color-mix(in srgb,var(--wr) 15%,transparent);border-left:4px solid var(--wr);padding:10px 12px;border-radius:8px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="w"><h1>Before You Agree</h1><div class="mu">Class experiment</div><div id="main"></div></div>
+<script>
+/* ======== CONFIG ======== */
+const SHEET_URL='https://script.google.com/macros/s/AKfycbxNGBv_Oa5aBKEJBK5DjjuXSfgHHPd2ZXxuxNcSu1ETiykpXcBq2If7BG_wLZNgOKY/exec'; // ends in /exec
+
+/* ======== Helpers ======== */
+const $=s=>document.querySelector(s), main=()=>$('#main');
+const fmt=d=>d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+const D7=new Date(Date.now()+7*864e5), D4=new Date(Date.now()+4*864e5);
+const dStr=fmt(D7), rStr=fmt(D4), d30=fmt(new Date(Date.now()+30*864e5));
+const S={};
+const sid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ======== Quiz definition (same for both groups) ======== */
+const QS=[
+ {k:'q1',t:'Does StreamNest share your data with advertising partners?',o:['No, never','Yes — activity data can be shared with ad partners, unless I opt out','Only my name and email, nothing else','I’m not sure'],c:1},
+ {k:'q2',t:'When will you be charged, and how much?',o:['Only ₹1 — nothing further','₹199 on '+dStr+', then every month','₹199 on '+d30+' only','₹99 on '+dStr],c:1},
+ {k:'q3',t:'What happens if you cancel within 3 months after your first paid month?',o:['Nothing, it’s free to cancel any time','I get a full refund','A ₹99 early-cancellation fee applies','I’m not sure'],c:2},
+ {k:'q4',t:'Which city’s courts handle any dispute with StreamNest?',o:['Delhi','Bengaluru','Mumbai','I’m not sure'],c:1}
+];
+const AGAIN=['Yes, the same choice','No, I would have chosen differently','Not sure'];
+const FREE=['Pressured to accept','A bit pushed','Neutral','Fairly free','Completely free'];
+const CONF=['Not at all','A little','Somewhat','Mostly','Completely'];
+
+const FULL=`<p><b>1. Definitions.</b> “Service” means the StreamNest platform, “Partners” means affiliated and unaffiliated third parties, and “You” means the subscriber.</p>
+<p><b>2. Trial.</b> The Service is offered for a promotional fee of ₹1 for a period of seven (7) days from activation (“Trial Period”). The Trial Period is non-transferable.</p>
+<p><b>3. Auto-renewal.</b> Unless terminated in accordance with clause 9, upon expiry of the Trial Period the subscription shall automatically convert to a paid plan at ₹199 per month, and the mandate registered via UPI AutoPay shall be debited on ${dStr} and on each monthly anniversary thereafter.</p>
+<p><b>4. Licence.</b> StreamNest grants You a limited, revocable, non-exclusive licence to access content for personal, non-commercial use.</p>
+<p><b>5. Data.</b> You consent to the collection of device identifiers, location, contacts and viewing activity. Such data may be disclosed to Partners for advertising, analytics and service improvement purposes. You may withdraw consent for advertising disclosures through Settings › Privacy.</p>
+<p><b>6. Content.</b> Catalogue availability varies by region and may change without notice.</p>
+<p><b>7. Acceptable use.</b> You shall not share credentials or circumvent technical protections.</p>
+<p><b>8. Fees.</b> All fees are inclusive of applicable taxes and are non-refundable except as required by law.</p>
+<p><b>9. Cancellation.</b> You may cancel through Settings › Subscription at least 24 hours prior to the renewal date. Where the subscription is cancelled within the first three (3) paid months, an early-termination charge of ₹99 shall be levied.</p>
+<p><b>10. Liability.</b> To the maximum extent permitted, StreamNest’s aggregate liability shall not exceed the fees paid in the preceding month.</p>
+<p><b>11. Changes.</b> StreamNest may amend these terms upon notice via the app or email.</p>
+<p><b>12. Governing law.</b> These terms are governed by the laws of India; courts at Bengaluru shall have exclusive jurisdiction.</p>
+<p><b>13. Miscellaneous.</b> If any provision is held unenforceable, the remainder shall continue in effect. These terms constitute the entire agreement.</p>`;
+
+/* ======== Flow ======== */
+function start(){
+  S.ans={};S.res=null;
+  const h=/^#?([AB])$/i.exec(location.hash||'');
+  S.group=h?h[1].toUpperCase():(Math.random()<.5?'A':'B');
+  main().innerHTML=`<div class="card"><h2>📱 Scenario</h2><p>You’re about to sign up for <b>StreamNest</b>, a fictional video app, because you want to watch a match tonight. It offers a <b>₹1 trial</b>.</p><p>Act exactly as you normally would on your phone. When you’re done, you’ll answer a few short questions.</p><label class="mu" for="roll">Roll number (required — only the host sees it)</label><input id="roll" maxlength="20" placeholder="e.g. 23BE045" style="width:100%;margin:6px 0 12px;padding:11px;font:inherit;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)"><p id="err" style="color:var(--bad);margin:0 0 10px"></p><button class="p" style="width:100%" onclick="begin()">Open the sign-up screen</button></div>`;
+}
+function begin(){
+  S.roll=(($('#roll')||{}).value||'').trim().toUpperCase().slice(0,20);
+  if(!S.roll){$('#err').textContent='Please enter your roll number.';return}
+  S.joinedAt=Date.now();
+  consent();
+}
+function consent(){
+  S.t0=Date.now();S.scrolled=false;S.opened=false;S.share=false;S.remind=undefined;S.custom=false;
+  if(S.group==='A'){
+    main().innerHTML=`<div class="card"><h2>StreamNest — Terms &amp; Conditions</h2><div class="tc" id="tc">${FULL}</div><p style="margin:14px 0 8px"><button class="p" style="width:100%;font-size:17px" onclick="decide('accept')">I Agree</button></p><button style="width:100%" onclick="decide('decline')">Cancel</button></div>`;
+    $('#tc').onscroll=e=>{const t=e.target;if(t.scrollTop+t.clientHeight>=t.scrollHeight-8)S.scrolled=true};
+  }else cardB();
+}
+function cardB(){
+  main().innerHTML=`<div class="card"><h2>Before you agree</h2><div class="mu">3 things that matter — in plain words</div>
+  <div class="pt"><div class="i">💳</div><div><h3>Money</h3>You pay <b>₹1 today</b>. On <b>${dStr}</b>, <b>₹199 will be debited</b> from your UPI AutoPay, then every month until you cancel.</div></div>
+  <div class="pt"><div class="i">📊</div><div><h3>Your data</h3>StreamNest can share your activity and location with <b>advertising partners</b>.
+  <div class="sw"><span>Share my data with ad partners</span><button class="tg ${S.share?'on':''}" aria-label="Share data toggle" onclick="S.share=!S.share;S.custom=true;cardB()"></button></div></div></div>
+  <div class="pt"><div class="i">🚪</div><div><h3>Cancelling</h3>Cancel in one tap in Settings. <b>Cancelling in the first 3 paid months costs ₹99.</b><div class="sw"><span>Remind me on ${rStr}, 3 days before the charge</span><button class="tg ${S.remind===false?'':'on'}" aria-label="Reminder toggle" onclick="S.remind=(S.remind===false);S.custom=true;cardB()"></button></div></div></div>
+  <p style="margin:6px 0"><a href="#" onclick="S.opened=true;fullB();return false" style="color:var(--ac)">Read the full terms →</a></p>
+  <div class="row" style="margin-top:12px"><button onclick="decide('accept')">Accept</button><button onclick="decide('decline')">Decline</button></div></div>`;
+}
+function fullB(){main().innerHTML=`<div class="card"><h2>Full terms</h2><div class="tc" style="max-height:380px">${FULL}</div><p><button class="p" style="width:100%" onclick="cardB()">← Back to summary</button></p></div>`}
+
+function decide(choice){
+  S.res={decision:choice,decisionMs:Date.now()-S.t0,scrolled:!!S.scrolled,openedFull:!!S.opened,customised:!!S.custom,
+    sharing:S.group==='B'?!!S.share:'',remind:S.group==='B'?S.remind!==false:''};
+  S.t1=Date.now();quiz(0);
+}
+function quiz(i){
+  if(i>=QS.length)return reveal();
+  const q=QS[i];
+  main().innerHTML=`<div class="card"><div class="mu">Question ${i+1} of 7</div><h2>${q.t}</h2>${q.o.map((o,j)=>`<button class="opt" onclick="pick(${i},${j})">${o}</button>`).join('')}</div>`;
+}
+function pick(i,j){S.ans[QS[i].k]=j;quiz(i+1)}
+function reveal(){
+  main().innerHTML=`<div class="card"><div class="mu">Question 5 of 7</div><h3>Here’s what the terms actually said</h3><ul style="padding-left:18px;margin:6px 0 14px"><li>₹1 today, then <b>₹199 on ${dStr}</b> and every month</li><li>A <b>₹99 fee</b> if you cancel in the first 3 paid months</li><li>Activity data <b>can be shared with ad partners</b> unless you opt out</li></ul><h2>Knowing this, would you still have made the same choice?</h2>${AGAIN.map((o,j)=>`<button class="opt" onclick="S.ans.again=${j};freeQ()">${o}</button>`).join('')}</div>`;
+}
+function freeQ(){
+  main().innerHTML=`<div class="card"><div class="mu">Question 6 of 7</div><h2>On that sign-up screen, how free did you feel to say no?</h2>${[1,2,3,4,5].map(n=>`<button class="opt" onclick="S.ans.free=${n};conf()">${n} — ${FREE[n-1]}</button>`).join('')}</div>`;
+}
+function conf(){
+  main().innerHTML=`<div class="card"><div class="mu">Question 7 of 7</div><h2>How well do you feel you understood what you just agreed to?</h2>${[1,2,3,4,5].map(n=>`<button class="opt" onclick="fin(${n})">${n} — ${CONF[n-1]}</button>`).join('')}</div>`;
+}
+
+function fin(c){
+  const a=S.ans,ok=i=>a[QS[i].k]===QS[i].c;
+  const r={
+    responseId:sid(),submittedAt:new Date().toISOString(),group:S.group,roll:S.roll||'',
+    ...S.res,
+    q1:QS[0].o[a.q1],q2:QS[1].o[a.q2],q3:QS[2].o[a.q3],q4:QS[3].o[a.q4],
+    q1ok:ok(0),q2ok:ok(1),q3ok:ok(2),q4ok:ok(3),
+    again:AGAIN[a.again],free:a.free,confidence:c,quizMs:Date.now()-S.t1
+  };
+  r.score=+r.q1ok + +r.q2ok + +r.q3ok;
+  r.total=r.score+(r.q4ok?1:0);
+  r.informed=r.decision==='accept'&&r.q1ok&&r.q2ok&&r.q3ok;
+  r.reversal=r.decision==='accept'&&a.again===1;
+  r.shared=r.decision==='accept'&&(S.group==='A'||r.sharing===true);
+  r.userAgent=navigator.userAgent;
+  S.last=r;
+  queueAdd(r);done('sending');flush();
+}
+
+/* ======== Sending to Google Sheet (with offline retry) ======== */
+const QK='bya_queue';
+const qGet=()=>{try{return JSON.parse(localStorage.getItem(QK)||'[]')}catch(e){return[]}};
+const qSet=q=>{try{localStorage.setItem(QK,JSON.stringify(q))}catch(e){}};
+const queueAdd=r=>{const q=qGet();q.push(r);qSet(q)};
+async function send(r){
+  // text/plain avoids a CORS preflight; Apps Script reads e.postData.contents
+  await fetch(SHEET_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(r)});
+}
+async function flush(){
+  if(!/^https:\/\/script\.google\.com\//.test(SHEET_URL)){if(S.last)done('noconfig');return}
+  let q=qGet(),left=[];
+  for(const r of q){try{await send(r)}catch(e){left.push(r)}}
+  qSet(left);
+  if(S.last)done(left.some(x=>x.responseId===S.last.responseId)?'failed':'sent');
+}
+
+function done(status){
+  const msg={sending:'<p class="mu">Saving your response…</p>',
+    sent:'<p>Your response has been recorded.</p>',
+    failed:'<p class="warn">Couldn’t reach the server. Your answers are saved on this device — check your connection and tap Retry.</p><button class="p" onclick="flush()">Retry</button>',
+    noconfig:'<p class="warn">Host: the Google Sheet URL isn’t set in this file yet.</p>'}[status];
+  main().innerHTML=`<div class="card" style="text-align:center"><h2>✅ Thank you!</h2>${msg}${status==='sent'?'<button onclick="S.last=null;start()">➕ Submit another response (new roll number)</button>':''}</div>`;
+}
+
+start();
+flush(); // resend anything left over from an earlier failed attempt
+</script>
+<!-- Backend: see Code.gs (Google Apps Script) -->
+</body>
+</html>
